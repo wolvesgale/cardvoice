@@ -12,18 +12,34 @@ export default function NewCardPage() {
   const [step, setStep] = useState<Step>('select')
   const [rawMemo, setRawMemo] = useState('')
   const [error, setError] = useState('')
-  const [editData, setEditData] = useState<OcrResult>({
-    name: null, company: null, title: null,
-    email: null, phone: null, address: null, website: null,
-  })
+  const [name, setName] = useState('')
+  const [company, setCompany] = useState('')
+  const [title, setTitle] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
+  const [website, setWebsite] = useState('')
+
+  function getEditData(): OcrResult {
+    return { name: name||null, company: company||null, title: title||null, email: email||null, phone: phone||null, address: address||null, website: website||null }
+  }
+
+  function setFromOcr(data: OcrResult) {
+    setName(data.name ?? '')
+    setCompany(data.company ?? '')
+    setTitle(data.title ?? '')
+    setEmail(data.email ?? '')
+    setPhone(data.phone ?? '')
+    setAddress(data.address ?? '')
+    setWebsite(data.website ?? '')
+  }
 
   async function handleCapture(base64: string, mediaType: string) {
     setStep('ocr-loading')
     setError('')
     try {
       const res = await fetch('/api/cards/ocr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ base64Image: base64, mediaType }),
       })
       if (!res.ok) {
@@ -32,7 +48,7 @@ export default function NewCardPage() {
         setStep('manual')
         return
       }
-      setEditData(await res.json())
+      setFromOcr(await res.json())
       setStep('confirm')
     } catch {
       setError('読み取りに失敗しました。手動で入力してください。')
@@ -42,38 +58,20 @@ export default function NewCardPage() {
 
   async function handleSave() {
     setStep('saving')
+    const cardInfo = getEditData()
     let memoData = { memo: rawMemo, tags: [] as string[], met_at: null as string | null, follow_up_at: null as string | null }
     if (rawMemo.trim()) {
       try {
-        const r = await fetch('/api/cards/memo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rawMemo, cardInfo: editData }) })
+        const r = await fetch('/api/cards/memo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rawMemo, cardInfo }) })
         if (r.ok) memoData = await r.json()
       } catch {}
     }
-    const res = await fetch('/api/cards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editData, ...memoData }) })
+    const res = await fetch('/api/cards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...cardInfo, ...memoData }) })
     if (!res.ok) { setError('保存に失敗しました'); setStep('voice'); return }
     router.push('/dashboard')
   }
 
-  const field = (key: keyof OcrResult, label: string, type = 'text', placeholder = '') => (
-    <div key={key}>
-      <label className="text-xs text-neutral-500 block mb-1">{label}</label>
-      <input type={type} value={editData[key] ?? ''} placeholder={placeholder}
-        onChange={e => setEditData(p => ({ ...p, [key]: e.target.value || null }))}
-        className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-500" />
-    </div>
-  )
-
-  const FormFields = () => (
-    <div className="space-y-3">
-      {field('name', '氏名 *', 'text', '山田 太郎')}
-      {field('company', '会社名', 'text', '株式会社〇〇')}
-      {field('title', '役職', 'text', '営業部長')}
-      {field('email', 'メール', 'email', 'example@company.com')}
-      {field('phone', '電話番号', 'tel', '090-0000-0000')}
-      {field('address', '住所', 'text', '東京都渋谷区...')}
-      {field('website', 'ウェブサイト', 'url', 'https://...')}
-    </div>
-  )
+  const inputClass = "w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-500"
 
   return (
     <main className="min-h-screen bg-neutral-950 px-4 py-6 pb-20">
@@ -88,17 +86,11 @@ export default function NewCardPage() {
           <p className="text-neutral-400 text-sm mb-2">入力方法を選んでください</p>
           <button onClick={() => setStep('capture')} className="w-full bg-neutral-900 border border-neutral-700 hover:border-emerald-600 rounded-2xl p-5 flex items-center gap-4 transition-colors text-left">
             <span className="text-3xl">📷</span>
-            <div>
-              <p className="font-semibold">名刺を撮影してAI読み取り</p>
-              <p className="text-xs text-neutral-500 mt-0.5">カメラで撮るだけ。AIが自動入力</p>
-            </div>
+            <div><p className="font-semibold">名刺を撮影してAI読み取り</p><p className="text-xs text-neutral-500 mt-0.5">カメラで撮るだけ。AIが自動入力</p></div>
           </button>
           <button onClick={() => setStep('manual')} className="w-full bg-neutral-900 border border-emerald-700 hover:border-emerald-500 rounded-2xl p-5 flex items-center gap-4 transition-colors text-left">
             <span className="text-3xl">✏️</span>
-            <div>
-              <p className="font-semibold text-emerald-400">手動で入力する</p>
-              <p className="text-xs text-neutral-500 mt-0.5">フォームに直接入力します</p>
-            </div>
+            <div><p className="font-semibold text-emerald-400">手動で入力する</p><p className="text-xs text-neutral-500 mt-0.5">フォームに直接入力します</p></div>
           </button>
         </div>
       )}
@@ -121,9 +113,17 @@ export default function NewCardPage() {
       {(step === 'manual' || step === 'confirm') && (
         <div className="space-y-4">
           <p className="text-neutral-400 text-sm">{step === 'confirm' ? '読み取り結果を確認・修正してください' : '名刺の情報を入力してください'}</p>
-          <FormFields />
-          <button onClick={() => setStep('voice')} disabled={!editData.name} className="w-full bg-emerald-500 disabled:opacity-40 text-white font-semibold py-3 rounded-xl">次へ（メモを追加）</button>
-          <button onClick={handleSave} disabled={!editData.name} className="w-full bg-neutral-800 disabled:opacity-40 text-neutral-300 py-3 rounded-xl text-sm">メモなしで保存</button>
+          <div className="space-y-3">
+            <div><label className="text-xs text-neutral-500 block mb-1">氏名 *</label><input value={name} onChange={e => setName(e.target.value)} placeholder="山田 太郎" className={inputClass} /></div>
+            <div><label className="text-xs text-neutral-500 block mb-1">会社名</label><input value={company} onChange={e => setCompany(e.target.value)} placeholder="株式会社〇〇" className={inputClass} /></div>
+            <div><label className="text-xs text-neutral-500 block mb-1">役職</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="営業部長" className={inputClass} /></div>
+            <div><label className="text-xs text-neutral-500 block mb-1">メール</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="example@company.com" className={inputClass} /></div>
+            <div><label className="text-xs text-neutral-500 block mb-1">電話番号</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="090-0000-0000" className={inputClass} /></div>
+            <div><label className="text-xs text-neutral-500 block mb-1">住所</label><input value={address} onChange={e => setAddress(e.target.value)} placeholder="東京都渋谷区..." className={inputClass} /></div>
+            <div><label className="text-xs text-neutral-500 block mb-1">ウェブサイト</label><input type="url" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." className={inputClass} /></div>
+          </div>
+          <button onClick={() => setStep('voice')} disabled={!name} className="w-full bg-emerald-500 disabled:opacity-40 text-white font-semibold py-3 rounded-xl">次へ（メモを追加）</button>
+          <button onClick={handleSave} disabled={!name} className="w-full bg-neutral-800 disabled:opacity-40 text-neutral-300 py-3 rounded-xl text-sm">メモなしで保存</button>
         </div>
       )}
 
